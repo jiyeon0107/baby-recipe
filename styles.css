@@ -1,0 +1,36 @@
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+  background: #f5f1ec;
+}
+.screen { display: none; }
+.screen.active { display: block; }
+.scroll-hide::-webkit-scrollbar { display: none; }
+.scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.tag-chip {
+  background: #fef3e8;
+  color: #c2691d;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #ff9a5a, #ff7a3c);
+  color: white;
+  box-shadow: 0 6px 16px rgba(255, 122, 60, 0.25);
+}
+.fab {
+  background: linear-gradient(135deg, #ff9a5a, #ff7a3c);
+  box-shadow: 0 10px 24px rgba(255, 122, 60, 0.35);
+}
+input, textarea { outline: none; }
+input:focus, textarea:focus { outline: none; }
+.app-container {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: white;
+  position: relative;
+  padding-bottom: 80px;
+}
+.bottom-nav {
+  max-width: 480px;
+  margin: 0 auto;
+}
+.card-shadow { box-shadow: 0 2px 8px rgba(0,0,0,0.04); }

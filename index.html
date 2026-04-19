@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>나의 유아식 레시피북</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#ff7a3c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="유아식 레시피" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- ============== 홈 화면: 레시피 목록 ============== -->
+  <div id="home-screen" class="screen active">
+    <div class="px-5 pt-6 pb-3">
+      <h1 class="text-2xl font-bold text-gray-800">나의 유아식 레시피북</h1>
+      <p class="text-sm text-gray-500 mt-1" id="recipe-count-text">총 0개의 레시피</p>
+    </div>
+
+    <!-- 검색 -->
+    <div class="px-5 pb-3">
+      <div class="relative">
+        <input
+          id="search-input"
+          type="text"
+          placeholder="레시피, 재료, 태그로 검색"
+          class="w-full bg-gray-100 rounded-xl px-4 py-2.5 pl-10 text-sm text-gray-800 placeholder-gray-400"
+        />
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+      </div>
+    </div>
+
+    <!-- 필터 -->
+    <div class="px-5 pb-3 flex gap-2 overflow-x-auto scroll-hide">
+      <button data-filter="all" class="filter-btn flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium bg-orange-400 text-white">전체</button>
+      <button data-filter="favorite" class="filter-btn flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">⭐ 즐겨찾기</button>
+      <div id="tag-filters" class="flex gap-2"></div>
+    </div>
+
+    <!-- 레시피 그리드 -->
+    <div id="recipe-list" class="px-5 pt-2 grid grid-cols-2 gap-3"></div>
+
+    <!-- 비어있을 때 -->
+    <div id="empty-state" class="hidden px-5 py-16 text-center">
+      <div class="text-5xl mb-3">🍼</div>
+      <p class="text-gray-500 text-sm">아직 레시피가 없어요.<br/>오른쪽 아래 + 버튼으로 첫 레시피를 등록해보세요.</p>
+    </div>
+
+    <!-- FAB 추가 버튼 -->
+    <button onclick="openEdit()" class="fab fixed bottom-24 right-6 w-14 h-14 rounded-full text-white text-2xl flex items-center justify-center" style="right: max(24px, calc(50% - 240px + 24px));">+</button>
+  </div>
+
+  <!-- ============== 레시피 상세 화면 ============== -->
+  <div id="detail-screen" class="screen">
+    <div class="sticky top-0 bg-white z-10 flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <button onclick="goHome()" class="text-gray-600 text-xl">‹</button>
+      <h2 class="text-base font-semibold text-gray-800">레시피</h2>
+      <div class="flex gap-3">
+        <button id="detail-favorite-btn" onclick="toggleFavoriteCurrent()" class="text-xl">☆</button>
+        <button onclick="editCurrent()" class="text-sm text-orange-500 font-medium">수정</button>
+      </div>
+    </div>
+    <div id="detail-content" class="pb-10"></div>
+  </div>
+
+  <!-- ============== 레시피 등록/수정 화면 ============== -->
+  <div id="edit-screen" class="screen">
+    <div class="sticky top-0 bg-white z-10 flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <button onclick="cancelEdit()" class="text-gray-500 text-sm">취소</button>
+      <h2 id="edit-title" class="text-base font-semibold text-gray-800">새 레시피</h2>
+      <button onclick="saveRecipe()" class="text-sm text-orange-500 font-semibold">저장</button>
+    </div>
+
+    <!-- 대표 사진 -->
+    <div class="px-5 pt-4">
+      <label class="block w-full aspect-[4/3] bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-orange-200 cursor-pointer overflow-hidden" id="cover-photo-label">
+        <input type="file" accept="image/*" class="hidden" onchange="handleCoverPhoto(event)" id="cover-photo-input" />
+        <div id="cover-placeholder">
+          <div class="text-4xl mb-1 text-center">📷</div>
+          <div class="text-sm text-center">대표 사진 추가하기</div>
+        </div>
+        <img id="cover-preview" class="hidden w-full h-full object-cover" />
+      </label>
+    </div>
+
+    <!-- 레시피 이름 -->
+    <div class="px-5 pt-5">
+      <input
+        id="edit-name"
+        type="text"
+        placeholder="레시피 이름 (예: 닭고기 애호박 죽)"
+        class="w-full text-lg font-semibold text-gray-800 placeholder-gray-300 border-b border-gray-200 pb-2 focus:border-orange-300"
+      />
+    </div>
+
+    <!-- 조리 시간 / 분량 -->
+    <div class="px-5 pt-4 grid grid-cols-2 gap-3">
+      <div>
+        <label class="text-xs text-gray-500">조리 시간 (분)</label>
+        <input id="edit-cooking-time" type="number" inputmode="numeric" class="w-full bg-gray-50 rounded-xl px-3 py-2 mt-1 text-sm" placeholder="20" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">분량</label>
+        <input id="edit-servings" type="text" class="w-full bg-gray-50 rounded-xl px-3 py-2 mt-1 text-sm" placeholder="2회분" />
+      </div>
+    </div>
+
+    <!-- 재료 섹션 -->
+    <div class="px-5 pt-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold text-gray-700">재료</h3>
+        <span class="text-xs text-gray-400" id="ingredient-count">0개</span>
+      </div>
+      <div id="ingredients-list" class="space-y-2"></div>
+      <div id="ingredient-suggestions" class="ml-2 flex flex-wrap gap-2 pt-2"></div>
+      <button onclick="addIngredient()" class="mt-3 w-full border border-dashed border-gray-300 rounded-xl py-2.5 text-sm text-gray-500 hover:bg-gray-50">
+        + 재료 추가
+      </button>
+    </div>
+
+    <!-- 만드는 순서 -->
+    <div class="px-5 pt-7">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">만드는 순서</h3>
+      <div id="steps-list" class="space-y-4"></div>
+      <button onclick="addStep()" class="mt-3 w-full border border-dashed border-gray-300 rounded-xl py-2.5 text-sm text-gray-500 hover:bg-gray-50">
+        + 단계 추가
+      </button>
+    </div>
+
+    <!-- 메모 -->
+    <div class="px-5 pt-7">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">메모 <span class="text-xs text-gray-400 font-normal">(아이 반응 등)</span></h3>
+      <textarea
+        id="edit-memo"
+        class="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm text-gray-800 resize-none"
+        rows="3"
+        placeholder="예: 아이가 잘 먹었음. 다음엔 감자 추가해보기"
+      ></textarea>
+    </div>
+
+    <!-- 태그 -->
+    <div class="px-5 pt-7 pb-10">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">태그</h3>
+      <div id="edit-tags" class="flex flex-wrap gap-2 mb-3"></div>
+      <div class="flex gap-2">
+        <input id="tag-input" type="text" placeholder="예: 후기이유식, 죽" class="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-sm" />
+        <button onclick="addTagFromInput()" class="px-4 rounded-xl bg-gray-100 text-sm text-gray-600">추가</button>
+      </div>
+      <div id="recent-tags" class="mt-3 flex flex-wrap gap-2"></div>
+    </div>
+
+    <!-- 삭제 버튼 -->
+    <div id="delete-section" class="hidden px-5 pb-10">
+      <button onclick="deleteCurrentRecipe()" class="w-full py-3 rounded-xl text-sm text-red-500 bg-red-50 font-medium">이 레시피 삭제</button>
+    </div>
+  </div>
+
+  <!-- ============== 재료로 찾기 화면 ============== -->
+  <div id="find-screen" class="screen">
+    <div class="sticky top-0 bg-white z-10 px-5 py-4 border-b border-gray-100">
+      <h2 class="text-lg font-bold text-gray-800">재료로 레시피 찾기</h2>
+      <p class="text-xs text-gray-500 mt-1">지금 집에 있는 재료를 입력해보세요</p>
+    </div>
+
+    <div class="px-5 pt-5">
+      <div id="current-ingredients" class="flex flex-wrap gap-2 mb-3 min-h-[2rem]"></div>
+      <div class="flex gap-2">
+        <input id="find-input" type="text" placeholder="재료명 입력 후 추가" class="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-sm" />
+        <button onclick="addCurrentIngredient()" class="px-4 rounded-xl btn-primary text-sm font-medium">추가</button>
+      </div>
+      <div id="find-suggestions" class="mt-3 flex flex-wrap gap-2"></div>
+    </div>
+
+    <div class="px-5 pt-6">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">추천 레시피</h3>
+      <div id="find-results" class="space-y-3"></div>
+      <div id="find-empty" class="py-10 text-center text-sm text-gray-400">재료를 하나 이상 추가해보세요</div>
+    </div>
+  </div>
+
+  <!-- ============== 설정 화면 ============== -->
+  <div id="settings-screen" class="screen">
+    <div class="sticky top-0 bg-white z-10 px-5 py-4 border-b border-gray-100">
+      <h2 class="text-lg font-bold text-gray-800">설정</h2>
+    </div>
+
+    <div class="px-5 pt-5 space-y-3">
+      <button onclick="exportData()" class="w-full flex items-center justify-between bg-gray-50 rounded-xl px-4 py-4 text-left">
+        <div>
+          <div class="text-sm font-medium text-gray-800">데이터 내보내기 (백업)</div>
+          <div class="text-xs text-gray-500 mt-0.5">모든 레시피를 JSON 파일로 저장</div>
+        </div>
+        <span class="text-gray-400">›</span>
+      </button>
+
+      <label class="w-full flex items-center justify-between bg-gray-50 rounded-xl px-4 py-4 text-left cursor-pointer">
+        <div>
+          <div class="text-sm font-medium text-gray-800">데이터 가져오기 (복원)</div>
+          <div class="text-xs text-gray-500 mt-0.5">JSON 파일에서 레시피 불러오기</div>
+        </div>
+        <span class="text-gray-400">›</span>
+        <input type="file" accept="application/json" class="hidden" onchange="importData(event)" />
+      </label>
+
+      <button onclick="loadSampleData()" class="w-full flex items-center justify-between bg-gray-50 rounded-xl px-4 py-4 text-left">
+        <div>
+          <div class="text-sm font-medium text-gray-800">샘플 레시피 불러오기</div>
+          <div class="text-xs text-gray-500 mt-0.5">처음 쓰는 사람을 위한 예시 레시피 3개</div>
+        </div>
+        <span class="text-gray-400">›</span>
+      </button>
+
+      <button onclick="clearAll()" class="w-full flex items-center justify-between bg-red-50 rounded-xl px-4 py-4 text-left">
+        <div>
+          <div class="text-sm font-medium text-red-500">모든 레시피 삭제</div>
+          <div class="text-xs text-red-400 mt-0.5">되돌릴 수 없으니 먼저 백업하세요</div>
+        </div>
+        <span class="text-red-400">›</span>
+      </button>
+    </div>
+
+    <div class="px-5 pt-8 pb-10 text-center">
+      <p class="text-xs text-gray-400">나의 유아식 레시피북 · v1.0</p>
+      <p class="text-xs text-gray-400 mt-1">데이터는 이 브라우저에만 저장됩니다</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- 하단 탭 네비게이션 -->
+<nav class="bottom-nav fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 flex z-20">
+  <button onclick="showScreen('home')" data-nav="home" class="nav-btn flex-1 flex flex-col items-center gap-0.5 py-1 text-orange-500">
+    <span class="text-xl">🏠</span>
+    <span class="text-[10px] font-medium">홈</span>
+  </button>
+  <button onclick="showScreen('find')" data-nav="find" class="nav-btn flex-1 flex flex-col items-center gap-0.5 py-1 text-gray-400">
+    <span class="text-xl">🔎</span>
+    <span class="text-[10px] font-medium">재료찾기</span>
+  </button>
+  <button onclick="showScreen('settings')" data-nav="settings" class="nav-btn flex-1 flex flex-col items-center gap-0.5 py-1 text-gray-400">
+    <span class="text-xl">⚙️</span>
+    <span class="text-[10px] font-medium">설정</span>
+  </button>
+</nav>
+
+<!-- 토스트 -->
+<div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-sm px-4 py-2 rounded-full opacity-0 transition-opacity z-50"></div>
+
+<script src="app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js');
+    });
+  }
+</script>
+</body>
+</html>
