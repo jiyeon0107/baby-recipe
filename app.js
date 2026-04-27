@@ -1,5 +1,67 @@
+// ============== Firebase 초기화 ==============
+// Firebase 콘솔에서 복사한 설정값으로 교체하세요
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+
+// ============== 인증 ==============
+let unsubscribeRecipes = null;
+
+auth.onAuthStateChanged(user => {
+  if (user) {
+    document.getElementById('login-screen').style.display = 'none';
+    const avatar = document.getElementById('user-avatar');
+    if (user.photoURL) { avatar.src = user.photoURL; avatar.classList.remove('hidden'); }
+    document.getElementById('current-user-email').textContent = user.email;
+    startRealtimeSync();
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+    state.recipes = [];
+    renderHome();
+    if (unsubscribeRecipes) { unsubscribeRecipes(); unsubscribeRecipes = null; }
+  }
+});
+
+function startRealtimeSync() {
+  if (unsubscribeRecipes) return;
+  unsubscribeRecipes = db.collection('recipes')
+    .orderBy('updatedAt', 'desc')
+    .onSnapshot(snapshot => {
+      state.recipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const active = document.querySelector('.screen.active');
+      if (active) {
+        if (active.id === 'home-screen') renderHome();
+        if (active.id === 'find-screen') renderFind();
+      }
+    }, err => console.error('Firestore 동기화 오류:', err));
+}
+
+async function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try {
+    await auth.signInWithPopup(provider);
+  } catch (err) {
+    if (err.code !== 'auth/popup-closed-by-user') toast('로그인에 실패했어요');
+  }
+}
+
+async function signOut() {
+  if (!confirm('로그아웃 할까요?')) return;
+  await auth.signOut();
+}
+
 // ============== 상태 ==============
-const STORAGE_KEY = 'baby-food-recipes-v1';
 let state = {
   recipes: [],
   currentFilter: 'all',
@@ -10,21 +72,6 @@ let state = {
   currentIngredients: [],
 };
 
-// ============== 저장/불러오기 ==============
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) state.recipes = JSON.parse(raw);
-  } catch (e) { console.warn('load failed', e); state.recipes = []; }
-}
-function saveState() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.recipes));
-  } catch (e) {
-    alert('저장 공간이 부족합니다. 사진 크기를 줄이거나 백업 후 일부 레시피를 삭제해주세요.');
-  }
-}
-
 // ============== 유틸 ==============
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
@@ -34,6 +81,15 @@ function toast(msg) {
   t.style.opacity = '1';
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.style.opacity = '0', 1800);
+}
+
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 // ============== 화면 전환 ==============
@@ -193,14 +249,21 @@ function openDetail(id) {
   showScreen('detail');
 }
 
-function toggleFavoriteCurrent() {
+async function toggleFavoriteCurrent() {
   const r = state.recipes.find(r => r.id === state.viewingRecipeId);
   if (!r) return;
-  r.isFavorite = !r.isFavorite;
+  const newVal = !r.isFavorite;
+  r.isFavorite = newVal;
   r.updatedAt = Date.now();
-  saveState();
-  document.getElementById('detail-favorite-btn').textContent = r.isFavorite ? '⭐' : '☆';
-  toast(r.isFavorite ? '즐겨찾기에 추가했어요' : '즐겨찾기에서 제거했어요');
+  document.getElementById('detail-favorite-btn').textContent = newVal ? '⭐' : '☆';
+  toast(newVal ? '즐겨찾기에 추가했어요' : '즐겨찾기에서 제거했어요');
+  try {
+    await db.collection('recipes').doc(r.id).update({ isFavorite: newVal, updatedAt: r.updatedAt });
+  } catch (err) {
+    r.isFavorite = !newVal;
+    document.getElementById('detail-favorite-btn').textContent = r.isFavorite ? '⭐' : '☆';
+    toast('저장에 실패했어요');
+  }
 }
 
 function editCurrent() {
@@ -341,31 +404,7 @@ function removeStep(i) {
   renderStepsEdit();
 }
 
-function handleCoverPhoto(ev) {
-  const file = ev.target.files[0];
-  if (!file) return;
-  resizeImage(file, 800, (dataUrl) => {
-    state.editingRecipe.coverPhoto = dataUrl;
-    document.getElementById('cover-preview').src = dataUrl;
-    document.getElementById('cover-preview').classList.remove('hidden');
-    document.getElementById('cover-placeholder').classList.add('hidden');
-  });
-}
-
-function handleStepPhoto(ev, stepIdx) {
-  const file = ev.target.files[0];
-  if (!file) return;
-  resizeImage(file, 600, (dataUrl) => {
-    state.editingRecipe.steps[stepIdx].photo = dataUrl;
-    renderStepsEdit();
-  });
-}
-
-function removeStepPhoto(i) {
-  state.editingRecipe.steps[i].photo = '';
-  renderStepsEdit();
-}
-
+// ============== 사진 처리 ==============
 function resizeImage(file, maxDim, cb) {
   const reader = new FileReader();
   reader.onload = () => {
@@ -379,11 +418,48 @@ function resizeImage(file, maxDim, cb) {
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      cb(canvas.toDataURL('image/jpeg', 0.8));
+      canvas.toBlob(blob => cb(blob), 'image/jpeg', 0.8);
     };
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
+}
+
+function handleCoverPhoto(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  resizeImage(file, 400, (blob) => {
+    state.editingRecipe._coverPhotoBlob = blob;
+    const preview = URL.createObjectURL(blob);
+    if (state.editingRecipe._coverPhotoPreview) URL.revokeObjectURL(state.editingRecipe._coverPhotoPreview);
+    state.editingRecipe._coverPhotoPreview = preview;
+    document.getElementById('cover-preview').src = preview;
+    document.getElementById('cover-preview').classList.remove('hidden');
+    document.getElementById('cover-placeholder').classList.add('hidden');
+  });
+}
+
+function handleStepPhoto(ev, stepIdx) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  resizeImage(file, 300, (blob) => {
+    const step = state.editingRecipe.steps[stepIdx];
+    if (step._photoPreview) URL.revokeObjectURL(step._photoPreview);
+    step._photoBlob = blob;
+    const preview = URL.createObjectURL(blob);
+    step._photoPreview = preview;
+    step.photo = preview;
+    renderStepsEdit();
+  });
+}
+
+function removeStepPhoto(i) {
+  const step = state.editingRecipe.steps[i];
+  if (step._photoPreview) URL.revokeObjectURL(step._photoPreview);
+  step._photoBlob = null;
+  step._photoPreview = null;
+  step.photo = '';
+  renderStepsEdit();
 }
 
 function renderTagsEdit() {
@@ -429,7 +505,8 @@ document.getElementById('tag-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); addTagFromInput(); }
 });
 
-function saveRecipe() {
+// ============== 레시피 저장/삭제 ==============
+async function saveRecipe() {
   const r = state.editingRecipe;
   r.name = document.getElementById('edit-name').value.trim();
   if (!r.name) { toast('레시피 이름을 입력해주세요'); return; }
@@ -440,30 +517,68 @@ function saveRecipe() {
   r.steps = r.steps.filter(s => s.text.trim() || s.photo);
   r.updatedAt = Date.now();
 
-  const idx = state.recipes.findIndex(x => x.id === r.id);
-  if (idx >= 0) state.recipes[idx] = r;
-  else state.recipes.unshift(r);
+  const saveBtn = document.querySelector('#edit-screen [onclick="saveRecipe()"]');
+  if (saveBtn) saveBtn.disabled = true;
 
-  saveState();
-  state.editingRecipe = null;
-  toast('저장했어요');
-  openDetail(r.id);
+  try {
+    if (r._coverPhotoBlob) {
+      r.coverPhoto = await blobToDataURL(r._coverPhotoBlob);
+      if (r._coverPhotoPreview) URL.revokeObjectURL(r._coverPhotoPreview);
+      delete r._coverPhotoBlob;
+      delete r._coverPhotoPreview;
+    }
+
+    for (let i = 0; i < r.steps.length; i++) {
+      if (r.steps[i]._photoBlob) {
+        r.steps[i].photo = await blobToDataURL(r.steps[i]._photoBlob);
+        if (r.steps[i]._photoPreview) URL.revokeObjectURL(r.steps[i]._photoPreview);
+        delete r.steps[i]._photoBlob;
+        delete r.steps[i]._photoPreview;
+      }
+    }
+
+    const recipeId = r.id;
+    const { id, ...data } = r;
+    await db.collection('recipes').doc(recipeId).set(data);
+
+    const idx = state.recipes.findIndex(x => x.id === recipeId);
+    if (idx >= 0) state.recipes[idx] = { id: recipeId, ...data };
+    else state.recipes.unshift({ id: recipeId, ...data });
+
+    state.editingRecipe = null;
+    toast('저장했어요');
+    openDetail(recipeId);
+  } catch (err) {
+    console.error('저장 오류:', err);
+    toast('저장에 실패했어요. 다시 시도해주세요.');
+    if (saveBtn) saveBtn.disabled = false;
+  }
 }
 
 function cancelEdit() {
+  if (state.editingRecipe) {
+    if (state.editingRecipe._coverPhotoPreview) URL.revokeObjectURL(state.editingRecipe._coverPhotoPreview);
+    (state.editingRecipe.steps || []).forEach(s => {
+      if (s._photoPreview) URL.revokeObjectURL(s._photoPreview);
+    });
+  }
   state.editingRecipe = null;
   if (state.viewingRecipeId) openDetail(state.viewingRecipeId);
   else goHome();
 }
 
-function deleteCurrentRecipe() {
+async function deleteCurrentRecipe() {
   if (!confirm('이 레시피를 삭제할까요? 되돌릴 수 없어요.')) return;
-  state.recipes = state.recipes.filter(r => r.id !== state.editingRecipe.id);
-  saveState();
-  state.editingRecipe = null;
-  state.viewingRecipeId = null;
-  toast('삭제했어요');
-  goHome();
+  const id = state.editingRecipe.id;
+  try {
+    await db.collection('recipes').doc(id).delete();
+    state.editingRecipe = null;
+    state.viewingRecipeId = null;
+    toast('삭제했어요');
+    goHome();
+  } catch (err) {
+    toast('삭제에 실패했어요');
+  }
 }
 
 // ============== 재료로 찾기 ==============
@@ -564,17 +679,20 @@ function importData(ev) {
   const file = ev.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const data = JSON.parse(reader.result);
       if (!Array.isArray(data)) throw new Error('형식 오류');
       if (!confirm(`${data.length}개의 레시피를 불러올까요? (기존 레시피에 추가됩니다)`)) return;
+      toast('불러오는 중...');
+      const batch = db.batch();
       data.forEach(r => {
         if (!r.id) r.id = uid();
         if (state.recipes.some(x => x.id === r.id)) r.id = uid();
-        state.recipes.push(r);
+        const { id, ...docData } = r;
+        batch.set(db.collection('recipes').doc(id), docData);
       });
-      saveState();
+      await batch.commit();
       toast('불러오기 완료');
       showScreen('home');
     } catch (e) {
@@ -585,17 +703,23 @@ function importData(ev) {
   ev.target.value = '';
 }
 
-function clearAll() {
+async function clearAll() {
   if (!confirm('정말 모든 레시피를 삭제할까요? 되돌릴 수 없어요.')) return;
   if (!confirm('한 번 더 확인할게요. 정말 삭제?')) return;
-  state.recipes = [];
-  saveState();
-  toast('모두 삭제했어요');
-  showScreen('home');
+  try {
+    const snapshot = await db.collection('recipes').get();
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    toast('모두 삭제했어요');
+    showScreen('home');
+  } catch (err) {
+    toast('삭제에 실패했어요');
+  }
 }
 
 // ============== 샘플 데이터 ==============
-function loadSampleData() {
+async function loadSampleData() {
   if (state.recipes.length > 0 && !confirm('이미 레시피가 있어요. 샘플을 추가할까요?')) return;
   const now = Date.now();
   const samples = [
@@ -660,12 +784,20 @@ function loadSampleData() {
       isFavorite: false, createdAt: now - 1000, updatedAt: now - 1000,
     }
   ];
-  samples.forEach(s => state.recipes.push(s));
-  saveState();
-  toast('샘플 레시피를 추가했어요');
-  showScreen('home');
+
+  try {
+    const batch = db.batch();
+    samples.forEach(s => {
+      const { id, ...data } = s;
+      batch.set(db.collection('recipes').doc(id), data);
+    });
+    await batch.commit();
+    toast('샘플 레시피를 추가했어요');
+    showScreen('home');
+  } catch (err) {
+    toast('추가에 실패했어요');
+  }
 }
 
 // ============== 시작 ==============
-loadState();
 showScreen('home');
