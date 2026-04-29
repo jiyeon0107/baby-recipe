@@ -26,7 +26,12 @@ auth.onAuthStateChanged(async user => {
     if (user.photoURL) { avatar.src = user.photoURL; avatar.classList.remove('hidden'); }
     document.getElementById('current-user-email').textContent = user.email;
 
-    currentUserProfile = await loadOrCreateUserProfile(user);
+    try {
+      currentUserProfile = await loadOrCreateUserProfile(user);
+    } catch (err) {
+      console.error('프로필 로드 실패:', err);
+      currentUserProfile = {};
+    }
     updateNicknameDisplay();
 
     if (!currentUserProfile.nickname) {
