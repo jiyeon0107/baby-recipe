@@ -1,12 +1,12 @@
 // ============== Firebase 초기화 ==============
 // Firebase 콘솔에서 복사한 설정값으로 교체하세요
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyB9DWEmMnalSgsQo2_zaSTLPPhuiQmXhVw",
+  authDomain: "baby-recipe-a67c7.firebaseapp.com",
+  projectId: "baby-recipe-a67c7",
+  storageBucket: "baby-recipe-a67c7.firebasestorage.app",
+  messagingSenderId: "686913550687",
+  appId: "1:686913550687:web:87f45800c6dede37e29eea"
 };
 
 firebase.initializeApp(firebaseConfig);
