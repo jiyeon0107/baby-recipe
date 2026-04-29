@@ -17,25 +17,75 @@ db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 
 // ============== 인증 ==============
 let unsubscribeRecipes = null;
+let currentUserProfile = null;
 
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   if (user) {
     document.getElementById('login-screen').style.display = 'none';
     const avatar = document.getElementById('user-avatar');
     if (user.photoURL) { avatar.src = user.photoURL; avatar.classList.remove('hidden'); }
     document.getElementById('current-user-email').textContent = user.email;
-    startRealtimeSync();
+
+    currentUserProfile = await loadOrCreateUserProfile(user);
+    updateNicknameDisplay();
+
+    if (!currentUserProfile.nickname) {
+      showNicknameModal();
+    } else {
+      startRealtimeSync();
+    }
   } else {
     document.getElementById('login-screen').style.display = 'flex';
+    currentUserProfile = null;
     state.recipes = [];
     renderHome();
     if (unsubscribeRecipes) { unsubscribeRecipes(); unsubscribeRecipes = null; }
   }
 });
 
+async function loadOrCreateUserProfile(user) {
+  const ref = db.collection('users').doc(user.uid);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    const profile = { email: user.email, photoURL: user.photoURL || '', createdAt: Date.now() };
+    await ref.set(profile);
+    return profile;
+  }
+  return snap.data();
+}
+
+function updateNicknameDisplay() {
+  const nickname = currentUserProfile && currentUserProfile.nickname;
+  const el = document.getElementById('current-nickname');
+  if (el) el.textContent = nickname || '(미설정)';
+}
+
+function showNicknameModal() {
+  const input = document.getElementById('nickname-input');
+  if (currentUserProfile && currentUserProfile.nickname) input.value = currentUserProfile.nickname;
+  document.getElementById('nickname-modal').classList.remove('hidden');
+}
+
+async function saveNickname() {
+  const val = document.getElementById('nickname-input').value.trim();
+  if (!val) { toast('닉네임을 입력해주세요'); return; }
+  if (val.length > 10) { toast('닉네임은 10자 이내로 입력해주세요'); return; }
+  try {
+    await db.collection('users').doc(auth.currentUser.uid).update({ nickname: val });
+    currentUserProfile.nickname = val;
+    updateNicknameDisplay();
+    document.getElementById('nickname-modal').classList.add('hidden');
+    toast('닉네임이 저장됐어요');
+    if (!unsubscribeRecipes) startRealtimeSync();
+  } catch (err) {
+    toast('저장에 실패했어요');
+  }
+}
+
 function startRealtimeSync() {
   if (unsubscribeRecipes) return;
   unsubscribeRecipes = db.collection('recipes')
+    .where('ownerId', '==', auth.currentUser.uid)
     .orderBy('updatedAt', 'desc')
     .onSnapshot(snapshot => {
       state.recipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -539,6 +589,9 @@ async function saveRecipe() {
 
     const recipeId = r.id;
     const { id, ...data } = r;
+    data.ownerId = auth.currentUser.uid;
+    data.ownerNickname = (currentUserProfile && currentUserProfile.nickname) || '';
+    if (!data.visibility) data.visibility = 'private';
     await db.collection('recipes').doc(recipeId).set(data);
 
     const idx = state.recipes.findIndex(x => x.id === recipeId);
@@ -690,6 +743,9 @@ function importData(ev) {
         if (!r.id) r.id = uid();
         if (state.recipes.some(x => x.id === r.id)) r.id = uid();
         const { id, ...docData } = r;
+        docData.ownerId = auth.currentUser.uid;
+        docData.ownerNickname = (currentUserProfile && currentUserProfile.nickname) || '';
+        if (!docData.visibility) docData.visibility = 'private';
         batch.set(db.collection('recipes').doc(id), docData);
       });
       await batch.commit();
@@ -707,7 +763,8 @@ async function clearAll() {
   if (!confirm('정말 모든 레시피를 삭제할까요? 되돌릴 수 없어요.')) return;
   if (!confirm('한 번 더 확인할게요. 정말 삭제?')) return;
   try {
-    const snapshot = await db.collection('recipes').get();
+    const snapshot = await db.collection('recipes')
+      .where('ownerId', '==', auth.currentUser.uid).get();
     const batch = db.batch();
     snapshot.docs.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
