@@ -130,7 +130,23 @@ function startRealtimeSync() {
     }, err => console.error('Firestore 동기화 오류:', err));
 }
 
+function isWebView() {
+  const ua = navigator.userAgent;
+  if (/KAKAOTALK|NAVER|Line\/|Instagram|FBAN|FBAV/.test(ua)) return true;
+  if (/Android/.test(ua) && /wv\b/.test(ua)) return true;
+  if (/iPhone|iPad/.test(ua) && !/Safari/.test(ua)) return true;
+  return false;
+}
+
+if (isWebView()) {
+  document.getElementById('webview-warning').classList.remove('hidden');
+}
+
 async function signInWithGoogle() {
+  if (isWebView()) {
+    toast('외부 브라우저(Chrome 등)에서 열어주세요');
+    return;
+  }
   const provider = new firebase.auth.GoogleAuthProvider();
   try {
     await auth.signInWithPopup(provider);
