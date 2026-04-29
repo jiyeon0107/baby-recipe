@@ -34,6 +34,8 @@ auth.onAuthStateChanged(async user => {
     }
     updateNicknameDisplay();
 
+    await migrateOrphanRecipes();
+
     if (!currentUserProfile.nickname) {
       showNicknameModal();
     } else {
@@ -69,6 +71,32 @@ function showNicknameModal() {
   const input = document.getElementById('nickname-input');
   if (currentUserProfile && currentUserProfile.nickname) input.value = currentUserProfile.nickname;
   document.getElementById('nickname-modal').classList.remove('hidden');
+}
+
+async function migrateOrphanRecipes() {
+  try {
+    const snapshot = await db.collection('recipes')
+      .where('ownerId', '==', null).get();
+    const noOwner = snapshot.docs;
+
+    // ownerId 필드 자체가 없는 문서도 찾기
+    const allSnap = await db.collection('recipes').get();
+    const orphans = allSnap.docs.filter(doc => !doc.data().ownerId);
+
+    if (orphans.length === 0) return;
+
+    const batch = db.batch();
+    orphans.forEach(doc => {
+      batch.update(doc.ref, {
+        ownerId: auth.currentUser.uid,
+        ownerNickname: (currentUserProfile && currentUserProfile.nickname) || '',
+        visibility: 'private',
+      });
+    });
+    await batch.commit();
+  } catch (err) {
+    console.error('마이그레이션 실패:', err);
+  }
 }
 
 async function saveNickname() {
