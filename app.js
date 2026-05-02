@@ -116,6 +116,7 @@ async function saveNickname() {
   }
 }
 
+// 내 레시피만 실시간 구독. 탐색 탭 공개 피드는 실시간 아닌 진입 시 1회 조회(fetchPublicRecipes).
 function startRealtimeSync() {
   if (unsubscribeRecipes) return;
   unsubscribeRecipes = db.collection('recipes')
@@ -129,6 +130,15 @@ function startRealtimeSync() {
         if (active.id === 'find-screen') renderFind();
       }
     }, err => console.error('Firestore 동기화 오류:', err));
+}
+
+async function fetchPublicRecipes() {
+  const snapshot = await db.collection('recipes')
+    .where('visibility', '==', 'public')
+    .orderBy('createdAt', 'desc')
+    .limit(50)
+    .get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 function isWebView() {
