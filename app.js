@@ -12,6 +12,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const storage = firebase.storage();
 
 db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 
@@ -182,13 +183,10 @@ function toast(msg) {
   t._timer = setTimeout(() => t.style.opacity = '0', 1800);
 }
 
-function blobToDataURL(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+async function uploadImage(blob, path) {
+  const ref = storage.ref(path);
+  await ref.put(blob);
+  return ref.getDownloadURL();
 }
 
 // ============== 화면 전환 ==============
@@ -620,8 +618,10 @@ async function saveRecipe() {
   if (saveBtn) saveBtn.disabled = true;
 
   try {
+    const recipeId = r.id;
+
     if (r._coverPhotoBlob) {
-      r.coverPhoto = await blobToDataURL(r._coverPhotoBlob);
+      r.coverPhoto = await uploadImage(r._coverPhotoBlob, `recipes/${auth.currentUser.uid}/${recipeId}/cover.jpg`);
       if (r._coverPhotoPreview) URL.revokeObjectURL(r._coverPhotoPreview);
       delete r._coverPhotoBlob;
       delete r._coverPhotoPreview;
@@ -629,14 +629,12 @@ async function saveRecipe() {
 
     for (let i = 0; i < r.steps.length; i++) {
       if (r.steps[i]._photoBlob) {
-        r.steps[i].photo = await blobToDataURL(r.steps[i]._photoBlob);
+        r.steps[i].photo = await uploadImage(r.steps[i]._photoBlob, `recipes/${auth.currentUser.uid}/${recipeId}/step_${i}.jpg`);
         if (r.steps[i]._photoPreview) URL.revokeObjectURL(r.steps[i]._photoPreview);
         delete r.steps[i]._photoBlob;
         delete r.steps[i]._photoPreview;
       }
     }
-
-    const recipeId = r.id;
     const { id, ...data } = r;
     data.ownerId = auth.currentUser.uid;
     data.ownerNickname = (currentUserProfile && currentUserProfile.nickname) || '';
@@ -673,6 +671,11 @@ async function deleteCurrentRecipe() {
   if (!confirm('이 레시피를 삭제할까요? 되돌릴 수 없어요.')) return;
   const id = state.editingRecipe.id;
   try {
+    try {
+      const folder = storage.ref(`recipes/${auth.currentUser.uid}/${id}`);
+      const list = await folder.listAll();
+      await Promise.all(list.items.map(item => item.delete()));
+    } catch (e) {}
     await db.collection('recipes').doc(id).delete();
     state.editingRecipe = null;
     state.viewingRecipeId = null;
