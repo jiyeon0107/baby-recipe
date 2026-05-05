@@ -677,6 +677,7 @@ async function deleteCurrentRecipe() {
       await Promise.all(list.items.map(item => item.delete()));
     } catch (e) {}
     await db.collection('recipes').doc(id).delete();
+    state.recipes = state.recipes.filter(r => r.id !== id);
     state.editingRecipe = null;
     state.viewingRecipeId = null;
     toast('삭제했어요');
