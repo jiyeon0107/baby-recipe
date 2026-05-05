@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.repository == 'jiyeon0107/baby-recipe'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
