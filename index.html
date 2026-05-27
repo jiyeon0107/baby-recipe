@@ -378,7 +378,7 @@
 
 <!-- 추가 방식 선택 모달 -->
 <div id="add-modal" class="hidden fixed inset-0 z-50">
-  <div class="absolute inset-0 bg-black/50" onclick="closeAddModal()"></div>
+  <div class="absolute inset-0 bg-black/50" onclick="closeAddModal()" onkeydown="if(event.key==='Enter'||event.key===' ')closeAddModal()" role="button" tabindex="0"></div>
   <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl px-5 pt-5 pb-10 max-w-lg mx-auto" style="left: max(0px, calc(50% - 240px)); right: max(0px, calc(50% - 240px));">
     <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5"></div>
     <h3 class="text-base font-bold text-gray-800 mb-4">새 레시피 추가</h3>
@@ -401,18 +401,7 @@
 
 <!-- 레시피 선택 모달 (여러 레시피 추출 시) -->
 <div id="recipe-select-modal" class="hidden fixed inset-0 z-50">
-  <div class="absolute inset-0 bg-black/50" onclick="closeRecipeSelectModal()"></div>
-  <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl px-5 pt-5 pb-10 max-w-lg mx-auto" style="left: max(0px, calc(50% - 240px)); right: max(0px, calc(50% - 240px)); max-height: 80vh; overflow-y: auto;">
-    <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4"></div>
-    <h3 class="text-base font-bold text-gray-800 mb-1">레시피 선택</h3>
-    <p id="recipe-select-count" class="text-xs text-gray-500 mb-4"></p>
-    <div id="recipe-select-list" class="space-y-2"></div>
-  </div>
-</div>
-
-<!-- 레시피 선택 모달 (여러 레시피 추출 시) -->
-<div id="recipe-select-modal" class="hidden fixed inset-0 z-50">
-  <div class="absolute inset-0 bg-black/50" onclick="closeRecipeSelectModal()"></div>
+  <div class="absolute inset-0 bg-black/50" onclick="closeRecipeSelectModal()" onkeydown="if(event.key==='Enter'||event.key===' ')closeRecipeSelectModal()" role="button" tabindex="0"></div>
   <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl px-5 pt-5 pb-10 max-w-lg mx-auto" style="left: max(0px, calc(50% - 240px)); right: max(0px, calc(50% - 240px)); max-height: 80vh; overflow-y: auto;">
     <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4"></div>
     <h3 class="text-base font-bold text-gray-800 mb-1">레시피 선택</h3>

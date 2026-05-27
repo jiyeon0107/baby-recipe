@@ -1125,9 +1125,10 @@ async function extractRecipeWithClaude() {
     if (!res.ok) throw new Error(`API ${res.status}`);
     const data = await res.json();
     const raw = data.content[0].text;
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error('JSON 파싱 실패');
-    const recipes = JSON.parse(match[0]);
+    const start = raw.indexOf('[');
+    const end = raw.lastIndexOf(']');
+    if (start === -1 || end === -1 || end <= start) throw new Error('JSON 파싱 실패');
+    const recipes = JSON.parse(raw.slice(start, end + 1));
     showExtractLoading(false);
     if (!Array.isArray(recipes) || recipes.length === 0) throw new Error('레시피 없음');
     if (recipes.length === 1) {
